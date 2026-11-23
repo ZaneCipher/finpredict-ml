@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Iniciar Sesión — FinPredict{% endblock %}
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 75vh;">
+    <div class="col-md-5 col-lg-4">
+        <div class="card-panel p-4 p-md-5">
+            <div class="text-center mb-4">
+                <div class="fs-2 mb-1" style="color: #22d3ee;">◈</div>
+                <h3 class="fw-bold mb-1">FinPredict ML</h3>
+                <p class="text-secondary small mb-0">Sistema de Predicción de Ingresos Financieros</p>
+            </div>
+
+            {% if form.errors %}
+                <div class="alert alert-danger py-2 small border-0">
+                    Usuario o contraseña incorrectos. Intenta de nuevo.
+                </div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label small text-secondary fw-semibold">Usuario</label>
+                    <input type="text" name="username" class="form-control form-control-lg" placeholder="Ej. luis" autofocus required>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label small text-secondary fw-semibold">Contraseña</label>
+                    <div class="input-group">
+                        <input type="password" id="passInput" name="password" class="form-control form-control-lg" placeholder="••••••••" required>
+                        <button class="btn btn-outline-secondary" type="button" onclick="togglePass()" title="Mostrar/ocultar">👁</button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-cyan btn-lg w-100">Ingresar</button>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function togglePass() {
+    const p = document.getElementById('passInput');
+    p.type = p.type === 'password' ? 'text' : 'password';
+}
+</script>
+{% endblock %}

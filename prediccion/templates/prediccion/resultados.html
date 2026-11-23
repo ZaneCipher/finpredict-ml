@@ -1,0 +1,284 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard Financiero — FinPredict{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">Dashboard de Predicción Financiera</h2>
+        <span class="text-secondary small">Entrenado con {{ res.n_estudiantes }} periodos el {{ res.fecha|date:"Y-m-d H:i" }} (persistido en disco)</span>
+    </div>
+    <a href="{% url 'subir_datos' %}" class="btn btn-outline-secondary btn-sm">&larr; Cargar otro CSV</a>
+</div>
+
+<!-- Fila 1: KPIs -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card-panel p-3 text-center">
+            <div class="text-secondary small text-uppercase fw-semibold">MAE (Error Absoluto Medio)</div>
+            <div class="fs-2 fw-bold font-mono mt-1" style="color: #22d3ee;">${{ res.mae }}</div>
+            <div class="text-secondary" style="font-size: 0.78rem;">Margen de error promedio en dólares</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-panel p-3 text-center">
+            <div class="text-secondary small text-uppercase fw-semibold">RMSE (Raíz Error Cuadrático)</div>
+            <div class="fs-2 fw-bold font-mono mt-1" style="color: #e879f9;">${{ res.rmse }}</div>
+            <div class="text-secondary" style="font-size: 0.78rem;">Penaliza desviaciones grandes</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card-panel p-3 text-center">
+            <div class="text-secondary small text-uppercase fw-semibold">R² (Precisión del Modelo)</div>
+            <div class="fs-2 fw-bold font-mono text-success mt-1">{{ res.r2 }}</div>
+            <div class="text-secondary" style="font-size: 0.78rem;">Explica el {{ res.r2_pct }}% de la variabilidad</div>
+        </div>
+    </div>
+</div>
+
+<!-- Fila 2: Predictor AJAX + Gráficas -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-5">
+        <div class="card-panel p-4 h-100" style="border-top: 3px solid #22d3ee;">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">Proyectar Nuevo Mes</h5>
+                <button type="button" class="btn btn-sm btn-outline-info font-mono" onclick="llenarEjemplo()">
+                    Llenar ejemplo
+                </button>
+            </div>
+
+            <div id="errorPred" class="alert alert-danger py-2 small d-none"></div>
+
+            <form id="predForm">
+                {% csrf_token %}
+                <div class="row g-3 mb-4">
+                    <div class="col-6">
+                        <label class="form-label small text-secondary">Marketing $ (X1)</label>
+                        <input type="number" step="0.01" min="0" name="x1" id="x1" class="form-control font-mono" placeholder="Ej. 1200" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-secondary">Gastos Op. $ (X2)</label>
+                        <input type="number" step="0.01" min="0" name="x2" id="x2" class="form-control font-mono" placeholder="Ej. 2700" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-secondary">Clientes Activos (X3)</label>
+                        <input type="number" step="1" min="0" name="x3" id="x3" class="form-control font-mono" placeholder="Ej. 190" required>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small text-secondary">Ventas Previas $ (X4)</label>
+                        <input type="number" step="0.01" min="0" name="x4" id="x4" class="form-control font-mono" placeholder="Ej. 11500" required>
+                    </div>
+                </div>
+                <button type="submit" id="btnPredecir" class="btn btn-cyan w-100 py-2">Calcular Ingreso Proyectado</button>
+            </form>
+
+            <div id="resultadoBox" class="mt-4 p-3 rounded-3 text-center d-none" style="background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.35);">
+                <div class="text-secondary small text-uppercase fw-semibold">Ingreso Mensual Estimado</div>
+                <div id="valorPrediccion" class="display-5 fw-bold font-mono my-1" style="color: #22d3ee;">$--</div>
+                <span id="badgeEstado" class="badge"></span>
+                <div id="avisoRango" class="alert alert-warning py-1 px-2 mt-2 mb-0 small d-none"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7 d-flex flex-column gap-4">
+        <div class="card-panel p-4">
+            <h5 class="fw-bold mb-3">Comparativa Visual (Real vs. Predicho)</h5>
+            <img src="{{ res.grafica_comparativa }}" alt="Gráfica Real vs Predicho" class="img-fluid rounded-3 border border-secondary-subtle">
+        </div>
+        <div class="card-panel p-4">
+            <h5 class="fw-bold mb-3">Impacto de Variables Financieras</h5>
+            <img src="{{ res.grafica_importancia }}" alt="Importancia de Variables" class="img-fluid rounded-3 border border-secondary-subtle">
+        </div>
+    </div>
+</div>
+
+<!-- Fila 3: Álgebra Lineal + Visor de Matrices -->
+<div class="card-panel p-4 mb-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h5 class="fw-bold mb-0">Verificación por Álgebra Lineal (Ecuación Normal)</h5>
+            <span class="text-secondary small">Método usado: <span class="text-info">{{ res.matrices_info.metodo }}</span></span>
+        </div>
+        <div class="px-3 py-2 rounded font-mono fw-bold" style="background: #0b0f19; border: 1px solid #334155; color: #22d3ee;">
+            β = (XᵀX)⁻¹XᵀY
+        </div>
+    </div>
+    <div class="table-responsive rounded-3 border border-secondary-subtle mb-3">
+        <table class="table table-dark table-hover align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Parámetro / Variable</th>
+                    <th class="text-end">Ecuación Normal (NumPy β)</th>
+                    <th class="text-end">Scikit-Learn</th>
+                </tr>
+            </thead>
+            <tbody class="font-mono small">
+                {% for row in res.tabla_coef %}
+                <tr>
+                    <td class="text-light" style="font-family: 'Inter', sans-serif;">{{ row.nombre }}</td>
+                    <td class="text-end" style="color: #22d3ee;">{{ row.numpy }}</td>
+                    <td class="text-end" style="color: #e879f9;">{{ row.sklearn }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <details class="mt-2">
+        <summary class="btn btn-sm btn-outline-info font-mono">Ver matrices paso a paso (X, Xᵀ, XᵀX, (XᵀX)⁻¹)</summary>
+        <div class="row g-3 mt-2">
+            <div class="col-md-6">
+                <div class="p-3 rounded border border-secondary-subtle" style="background:#0b0f19;">
+                    <div class="small text-info font-mono mb-2">Matriz X ({{ res.matrices_info.X_shape }}) — primeras 6 filas:</div>
+                    <pre class="mb-0 text-light font-mono" style="font-size:0.78rem;">{{ res.matrices_info.X_preview }}</pre>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded border border-secondary-subtle" style="background:#0b0f19;">
+                    <div class="small text-info font-mono mb-2">Matriz Transpuesta Xᵀ ({{ res.matrices_info.XT_shape }}) — primeras 6 cols:</div>
+                    <pre class="mb-0 text-light font-mono" style="font-size:0.78rem;">{{ res.matrices_info.XT_preview }}</pre>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded border border-secondary-subtle" style="background:#0b0f19;">
+                    <div class="small text-info font-mono mb-2">Producto XᵀX ({{ res.matrices_info.XTX_shape }}):</div>
+                    <pre class="mb-0 text-light font-mono" style="font-size:0.78rem;">{{ res.matrices_info.XTX_str }}</pre>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded border border-secondary-subtle" style="background:#0b0f19;">
+                    <div class="small text-info font-mono mb-2">Inversa (XᵀX)⁻¹ ({{ res.matrices_info.XTX_shape }}):</div>
+                    <pre class="mb-0 text-light font-mono" style="font-size:0.78rem;">{{ res.matrices_info.XTX_inv_str }}</pre>
+                </div>
+            </div>
+        </div>
+    </details>
+</div>
+
+<!-- Fila 4: Historial en SQLite + Exportar CSV -->
+<div class="card-panel p-4">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div>
+            <h5 class="fw-bold mb-0">Historial de Proyecciones (SQLite)</h5>
+            <span class="text-secondary small">Últimas 15 proyecciones guardadas para @{{ user.username }}</span>
+        </div>
+        <a href="{% url 'exportar_historial_csv' %}" id="btnExportar" class="btn btn-sm btn-outline-success font-mono {% if not historial %}d-none{% endif %}">
+            ⬇ Exportar CSV
+        </a>
+    </div>
+
+    <div id="sinHistorial" class="text-secondary small {% if historial %}d-none{% endif %}">
+        Aún no hay proyecciones guardadas. Usa el formulario superior para registrar la primera.
+    </div>
+
+    <div id="tablaHistorialWrap" class="table-responsive rounded-3 border border-secondary-subtle {% if not historial %}d-none{% endif %}">
+        <table class="table table-dark table-hover align-middle text-center mb-0 font-mono small">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>X1 (Mkt)</th>
+                    <th>X2 (Gastos)</th>
+                    <th>X3 (Clientes)</th>
+                    <th>X4 (Prev.)</th>
+                    <th>Ingreso Est.</th>
+                </tr>
+            </thead>
+            <tbody id="historialBody">
+                {% for h in historial %}
+                <tr>
+                    <td class="text-secondary">{{ h.fecha|date:"Y-m-d H:i" }}</td>
+                    <td>${{ h.x1 }}</td>
+                    <td>${{ h.x2 }}</td>
+                    <td>{{ h.x3|floatformat:0 }}</td>
+                    <td>${{ h.x4 }}</td>
+                    <td class="fw-bold" style="color: #22d3ee;">${{ h.prediccion }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+function llenarEjemplo() {
+    document.getElementById('x1').value = 1200;
+    document.getElementById('x2').value = 2700;
+    document.getElementById('x3').value = 190;
+    document.getElementById('x4').value = 11500;
+}
+
+document.getElementById('predForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('btnPredecir');
+    const errBox = document.getElementById('errorPred');
+    errBox.classList.add('d-none');
+    btn.disabled = true;
+    btn.textContent = 'Calculando...';
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const payload = {
+        x1: document.getElementById('x1').value,
+        x2: document.getElementById('x2').value,
+        x3: document.getElementById('x3').value,
+        x4: document.getElementById('x4').value,
+    };
+
+    try {
+        const res = await fetch("{% url 'api_predecir' %}", {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            errBox.textContent = data.error || 'Error al calcular la proyección.';
+            errBox.classList.remove('d-none');
+            return;
+        }
+
+        document.getElementById('resultadoBox').classList.remove('d-none');
+        document.getElementById('valorPrediccion').textContent = `$${Number(data.prediccion).toLocaleString('en-US', {minimumFractionDigits: 2})}`;
+
+        const badge = document.getElementById('badgeEstado');
+        const utilFmt = Number(data.utilidad).toLocaleString('en-US', {minimumFractionDigits: 2});
+        if (data.rentable) {
+            badge.className = 'badge bg-success-subtle text-success border border-success-subtle';
+            badge.textContent = `✓ Rentable (Utilidad est.: +$${utilFmt})`;
+        } else {
+            badge.className = 'badge bg-danger-subtle text-danger border border-danger-subtle';
+            badge.textContent = `⚠ Déficit estimado ($${utilFmt})`;
+        }
+
+        const aviso = document.getElementById('avisoRango');
+        if (data.aviso_rango) {
+            aviso.textContent = data.aviso_rango;
+            aviso.classList.remove('d-none');
+        } else {
+            aviso.classList.add('d-none');
+        }
+
+        document.getElementById('sinHistorial').classList.add('d-none');
+        document.getElementById('tablaHistorialWrap').classList.remove('d-none');
+        document.getElementById('btnExportar').classList.remove('d-none');
+
+        const r = data.registro;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="text-secondary">${r.fecha}</td>
+            <td>$${r.x1}</td>
+            <td>$${r.x2}</td>
+            <td>${Math.round(r.x3)}</td>
+            <td>$${r.x4}</td>
+            <td class="fw-bold" style="color: #22d3ee;">$${r.prediccion}</td>
+        `;
+        document.getElementById('historialBody').prepend(tr);
+    } catch (err) {
+        errBox.textContent = 'Error de conexión con el servidor.';
+        errBox.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Calcular Ingreso Proyectado';
+    }
+});
+</script>
+{% endblock %}

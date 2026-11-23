@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Cargar Dataset Financiero — FinPredict{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="card-panel p-4 p-md-5 mb-4">
+            <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                <div>
+                    <h2 class="fw-bold mb-1">Carga de Datos Financieros y Entrenamiento</h2>
+                    <p class="text-secondary mb-0 small">Sube <code class="text-info">datos_financieros.csv</code> con las columnas <span class="font-mono text-light">X1, X2, X3, X4, Y</span>.</p>
+                </div>
+                {% if modelo_listo %}
+                    <a href="{% url 'resultados_prediccion' %}" class="btn btn-cyan px-4">
+                        Ir al Dashboard &rarr;
+                    </a>
+                {% endif %}
+            </div>
+
+            {% if error_msg %}
+                <div class="alert alert-danger border-0">{{ error_msg }}</div>
+            {% endif %}
+
+            <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                {% csrf_token %}
+                <label for="archivo_csv" class="w-100 p-4 rounded-3 text-center mb-3 d-block"
+                       style="border: 2px dashed #334155; background: #0b0f19; cursor: pointer;">
+                    <div class="fs-3 mb-1" style="color: #22d3ee;">⬆</div>
+                    <div class="fw-semibold" id="fileLabel">Haz clic para seleccionar tu archivo CSV financiero</div>
+                    <div class="text-secondary small mt-1">X1 (Marketing $) · X2 (Gastos Op. $) · X3 (Clientes) · X4 (Ventas Prev. $) · Y (Ingresos $)</div>
+                    <input type="file" id="archivo_csv" name="archivo_csv" accept=".csv" required class="d-none">
+                </label>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" id="btnSubmit" class="btn btn-cyan px-4 py-2">
+                        Cargar y Entrenar Modelo
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        {% if datos_html %}
+        <div class="card-panel p-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0 text-light">Histórico Financiero Cargado</h5>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle mt-1">
+                        ✓ {{ n_registros }} periodos procesados — Modelo entrenado
+                    </span>
+                </div>
+                <a href="{% url 'resultados_prediccion' %}" class="btn btn-cyan">
+                    Ver Métricas, Álgebra y Proyectar &rarr;
+                </a>
+            </div>
+            <div class="table-responsive rounded-3 border border-secondary-subtle" style="max-height: 420px;">
+                {{ datos_html|safe }}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+const input = document.getElementById('archivo_csv');
+const label = document.getElementById('fileLabel');
+input.addEventListener('change', () => {
+    if (input.files.length > 0) {
+        label.innerHTML = `<span class="text-info font-mono">${input.files[0].name}</span> listo para entrenar`;
+    }
+});
+document.getElementById('uploadForm').addEventListener('submit', () => {
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Entrenando...';
+});
+</script>
+{% endblock %}
